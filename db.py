@@ -9,7 +9,20 @@ from datetime import datetime
 from typing import Optional
 from sqlmodel import SQLModel, Field, create_engine, Session, select
 
-_raw_url = os.getenv("DATABASE_URL", "sqlite:///app.db")
+# Resolution order:
+#   1. DATABASE_URL (any SQLAlchemy-style URL).
+#   2. SUPABASE_URL — accepted iff it is a Postgres URI (i.e. starts with
+#      "postgres" rather than "https"). Lets users paste their Supabase
+#      Session-pooler connection string under the SUPABASE_URL name.
+#   3. Local SQLite fallback for tests / dev without keys.
+_raw_url = (os.getenv("DATABASE_URL") or "").strip()
+if not _raw_url:
+    _su = (os.getenv("SUPABASE_URL") or "").strip()
+    if _su.startswith("postgres"):
+        _raw_url = _su
+if not _raw_url:
+    _raw_url = "sqlite:///app.db"
+
 # Normalize Supabase / Heroku-style URIs to use the psycopg v3 driver explicitly.
 if _raw_url.startswith("postgres://"):
     _raw_url = "postgresql+psycopg://" + _raw_url[len("postgres://"):]
