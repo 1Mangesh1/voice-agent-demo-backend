@@ -21,7 +21,11 @@ services:
       - key: LIVEKIT_API_SECRET
         sync: false
       - key: DATABASE_URL
-        value: sqlite:///app.db
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
 
   - type: worker
     name: voice-agent-demo-worker
@@ -45,4 +49,8 @@ services:
       - key: LIVEKIT_API_SECRET
         sync: false
       - key: DATABASE_URL
-        value: sqlite:///app.db
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false

@@ -1,11 +1,29 @@
-"""SQLite via SQLModel. Tables: User, Appointment, CallSession."""
+"""SQLModel over Postgres (Supabase) or SQLite. Tables: User, Appointment, CallSession.
+
+Set DATABASE_URL to a Supabase Postgres URI to use the cloud DB:
+  postgresql://postgres.<ref>:<pwd>@aws-0-<region>.pooler.supabase.com:6543/postgres
+Falls back to local SQLite (`sqlite:///app.db`) when unset.
+"""
 import os
 from datetime import datetime
 from typing import Optional
 from sqlmodel import SQLModel, Field, create_engine, Session, select
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///app.db")
-engine = create_engine(DATABASE_URL, echo=False, connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {})
+_raw_url = os.getenv("DATABASE_URL", "sqlite:///app.db")
+# Normalize Supabase / Heroku-style URIs to use the psycopg v3 driver explicitly.
+if _raw_url.startswith("postgres://"):
+    _raw_url = "postgresql+psycopg://" + _raw_url[len("postgres://"):]
+elif _raw_url.startswith("postgresql://") and "+psycopg" not in _raw_url:
+    _raw_url = "postgresql+psycopg://" + _raw_url[len("postgresql://"):]
+DATABASE_URL = _raw_url
+
+_is_sqlite = DATABASE_URL.startswith("sqlite")
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,
+    pool_pre_ping=not _is_sqlite,
+    connect_args={"check_same_thread": False} if _is_sqlite else {},
+)
 
 
 class User(SQLModel, table=True):

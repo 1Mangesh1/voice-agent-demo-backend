@@ -1,6 +1,6 @@
 # voice-agent-demo-backend
 
-Front-desk healthcare voice AI. LiveKit Agents + Deepgram STT + Cartesia TTS + Gemini LLM + SQLite.
+Front-desk healthcare voice AI. LiveKit Agents + Deepgram STT + Cartesia TTS + Gemini LLM + Supabase Postgres (SQLite fallback for local dev).
 
 ## Layout
 
@@ -9,7 +9,7 @@ Front-desk healthcare voice AI. LiveKit Agents + Deepgram STT + Cartesia TTS + G
 | `agent.py` | LiveKit agent worker. STT→LLM→TTS loop. 7 function tools. Emits tool-call events on data channel. |
 | `server.py` | FastAPI: `/token` (LiveKit JWT), `/summary` (Gemini summary), `/session/{room}`, `/health`. |
 | `tools.py` | Pure DB tool implementations. Unit-tested. |
-| `db.py` | SQLModel schema (User, Appointment, CallSession). |
+| `db.py` | SQLModel schema (User, Appointment, CallSession). Engine picks Supabase Postgres when `DATABASE_URL` is set, else SQLite. |
 | `tests/` | pytest suite over tools. |
 | `render.yaml` | Render blueprint: web service (FastAPI) + worker (agent). |
 
@@ -41,3 +41,11 @@ Every tool call is mirrored on the LiveKit data channel as `{type:"tool", name, 
 ## Summary
 
 `POST /summary {room}` → reads `CallSession.transcript`, asks Gemini for 4–6 bullets + extracted info JSON. Cached on `CallSession.summary`. Target: <10s.
+
+## Database
+
+`DATABASE_URL` controls the engine.
+- **Supabase Postgres** (prod): grab from Supabase → Settings → Database → Connection String → URI (Session pooler, port 6543). Paste verbatim. `db.py` rewrites `postgres://` / `postgresql://` to `postgresql+psycopg://` for the psycopg v3 driver.
+- **SQLite** (local dev / tests): leave `DATABASE_URL` blank → `app.db` is created in CWD.
+
+`init_db()` runs `SQLModel.metadata.create_all` on startup, so the three tables are created the first time the API or worker boots against a fresh Supabase project — no migrations needed for the demo.
