@@ -76,7 +76,7 @@ def make_summary(req: SummaryRequest) -> dict:
         sess = s.exec(select(CallSession).where(CallSession.room_name == req.room)).first()
         if sess is None:
             raise HTTPException(404, "session not found")
-        if sess.summary:
+        if sess.summary and not sess.summary.startswith("(summary failed:"):
             return _build_summary_response(sess, s)
 
         try:
@@ -94,7 +94,7 @@ def make_summary(req: SummaryRequest) -> dict:
                 f"Transcript:\n{transcript_str}"
             )
             try:
-                model = genai.GenerativeModel("gemini-2.0-flash-exp")
+                model = genai.GenerativeModel("gemini-2.5-flash")
                 resp = model.generate_content(prompt)
                 sess.summary = resp.text
             except Exception as e:

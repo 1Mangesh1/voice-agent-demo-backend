@@ -156,7 +156,7 @@ async def entrypoint(ctx: JobContext) -> None:
 
     session = AgentSession(
         stt=deepgram.STT(model="nova-3"),
-        llm=google.LLM(model="gemini-2.0-flash-exp"),
+        llm=google.LLM(model="gemini-2.5-flash"),
         tts=cartesia.TTS(voice=os.getenv("CARTESIA_VOICE_ID") or None),
         vad=silero.VAD.load(),
     )
