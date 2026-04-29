@@ -17,7 +17,7 @@ from typing import Annotated, Optional
 from dotenv import load_dotenv
 from livekit import agents, rtc
 from livekit.agents import Agent, AgentSession, JobContext, RoomInputOptions, function_tool
-from livekit.plugins import cartesia, deepgram, google, silero
+from livekit.plugins import cartesia, deepgram, google
 from sqlmodel import select
 
 import tools as T
@@ -154,11 +154,19 @@ async def entrypoint(ctx: JobContext) -> None:
     await ctx.connect()
     log.info(f"connected to room {ctx.room.name}")
 
+    # No local VAD: Silero can't keep up with realtime on Render's shared
+    # 0.1-CPU free dyno (logs showed "inference slower than realtime,
+    # delay: 1.5s" → end-of-turn never fires → user input dropped).
+    # Deepgram nova-3's server-side endpointing handles turn detection
+    # without burning local CPU.
     session = AgentSession(
-        stt=deepgram.STT(model="nova-3"),
+        stt=deepgram.STT(
+            model="nova-3",
+            interim_results=True,
+            endpointing_ms=300,
+        ),
         llm=google.LLM(model="gemini-2.5-flash"),
         tts=cartesia.TTS(voice=os.getenv("CARTESIA_VOICE_ID") or None),
-        vad=silero.VAD.load(),
     )
 
     @session.on("user_input_transcribed")
