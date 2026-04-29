@@ -147,7 +147,10 @@ def _record_turn(room_name: str, role: str, text: str) -> None:
 
 
 async def entrypoint(ctx: JobContext) -> None:
-    init_db()
+    try:
+        init_db()
+    except Exception as e:
+        log.warning(f"init_db deferred: {e}")
     await ctx.connect()
     log.info(f"connected to room {ctx.room.name}")
 

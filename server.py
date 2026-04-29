@@ -22,7 +22,14 @@ from sqlmodel import select
 from db import Appointment, CallSession, init_db, get_session
 
 load_dotenv()
-init_db()
+
+# Don't crash module import when the DB is unreachable — uvicorn must still
+# bind PORT so Render's healthcheck passes and the user can swap envs.
+try:
+    init_db()
+except Exception as e:  # pragma: no cover
+    import logging
+    logging.getLogger("server").warning(f"init_db deferred: {e}")
 
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY", ""))
 
