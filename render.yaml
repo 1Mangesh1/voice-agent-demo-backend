@@ -1,38 +1,15 @@
+# Single web service — runs both FastAPI (server.py) and the LiveKit
+# agent worker (agent.py) under one process via start.sh.
+# Render's free plan does not include background workers, so collapsing
+# both into one web service keeps the deploy free-tier compatible.
 services:
   - type: web
     name: voice-agent-demo-api
-    env: python
+    runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
-    envVars:
-      - key: GOOGLE_API_KEY
-        sync: false
-      - key: DEEPGRAM_API_KEY
-        sync: false
-      - key: CARTESIA_API_KEY
-        sync: false
-      - key: CARTESIA_VOICE_ID
-        sync: false
-      - key: LIVEKIT_URL
-        sync: false
-      - key: LIVEKIT_API_KEY
-        sync: false
-      - key: LIVEKIT_API_SECRET
-        sync: false
-      - key: DATABASE_URL
-        sync: false
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_KEY
-        sync: false
-
-  - type: worker
-    name: voice-agent-demo-worker
-    env: python
-    plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python agent.py start
+    startCommand: ./start.sh
+    healthCheckPath: /health
     envVars:
       - key: GOOGLE_API_KEY
         sync: false

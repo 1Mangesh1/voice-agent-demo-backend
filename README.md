@@ -11,7 +11,8 @@ Front-desk healthcare voice AI. LiveKit Agents + Deepgram STT + Cartesia TTS + G
 | `tools.py` | Pure DB tool implementations. Unit-tested. |
 | `db.py` | SQLModel schema (User, Appointment, CallSession). Engine picks Supabase Postgres when `DATABASE_URL` is set, else SQLite. |
 | `tests/` | pytest suite over tools. |
-| `render.yaml` | Render blueprint: web service (FastAPI) + worker (agent). |
+| `render.yaml` | Render blueprint: single free-tier web service. |
+| `start.sh` | Runs `python agent.py start &` then `uvicorn server:app` in foreground — one process, two roles. Exists because Render's free plan doesn't include background workers. |
 
 ## Local run
 
