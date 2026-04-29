@@ -185,4 +185,14 @@ async def entrypoint(ctx: JobContext) -> None:
 
 
 if __name__ == "__main__":
-    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
+    # On Render's free dyno (512 MB, shared CPU) the default subprocess
+    # prewarming pool OOMs and times out. Run jobs in the same process and
+    # disable idle warmups so the worker survives on minimal resources.
+    agents.cli.run_app(
+        agents.WorkerOptions(
+            entrypoint_fnc=entrypoint,
+            job_executor_type=agents.JobExecutorType.THREAD,
+            num_idle_processes=0,
+            initialize_process_timeout=60.0,
+        )
+    )
