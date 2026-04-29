@@ -159,6 +159,14 @@ async def entrypoint(ctx: JobContext) -> None:
     # delay: 1.5s" → end-of-turn never fires → user input dropped).
     # Deepgram nova-3's server-side endpointing handles turn detection
     # without burning local CPU.
+    #
+    # Cartesia: `voice` must be a UUID, not a model name. "sonic-english"
+    # is the *model*; voice IDs look like UUIDs (find them in Cartesia's
+    # voice library). Default to "Sonia" — a stable free voice that ships
+    # with every Cartesia account — when the env value isn't UUID-shaped.
+    raw_voice = (os.getenv("CARTESIA_VOICE_ID") or "").strip()
+    voice_id = raw_voice if len(raw_voice) == 36 and raw_voice.count("-") == 4 else "694f9389-aac1-45b6-b726-9d9369183238"
+
     session = AgentSession(
         stt=deepgram.STT(
             model="nova-3",
@@ -166,7 +174,7 @@ async def entrypoint(ctx: JobContext) -> None:
             endpointing_ms=300,
         ),
         llm=google.LLM(model="gemini-2.5-flash"),
-        tts=cartesia.TTS(voice=os.getenv("CARTESIA_VOICE_ID") or None),
+        tts=cartesia.TTS(model="sonic-english", voice=voice_id),
     )
 
     @session.on("user_input_transcribed")
