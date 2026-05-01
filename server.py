@@ -83,30 +83,28 @@ class ToolPayload(BaseModel):
 
 
 _TOOL_FNS = {
-    "identify_user": lambda a: T.identify_user(a.get("phone", ""), a.get("name")),
-    "fetch_slots": lambda a: T.fetch_slots(a.get("date")),
-    "book_appointment": lambda a: T.book_appointment(a.get("phone", ""), a.get("slot", "")),
-    "retrieve_appointments": lambda a: T.retrieve_appointments(a.get("phone", "")),
-    "cancel_appointment": lambda a: T.cancel_appointment(int(a.get("appointment_id", 0))),
-    "modify_appointment": lambda a: T.modify_appointment(
+    "identify_user": lambda a, c: T.identify_user(a.get("phone", ""), a.get("name")),
+    "fetch_slots": lambda a, c: T.fetch_slots(a.get("date")),
+    "book_appointment": lambda a, c: T.book_appointment(a.get("phone", ""), a.get("slot", "")),
+    "retrieve_appointments": lambda a, c: T.retrieve_appointments(a.get("phone", "")),
+    "cancel_appointment": lambda a, c: T.cancel_appointment(int(a.get("appointment_id", 0))),
+    "modify_appointment": lambda a, c: T.modify_appointment(
         int(a.get("appointment_id", 0)), a.get("new_slot", "")
     ),
+    "end_conversation": lambda a, c: T.end_conversation(c or ""),
 }
 
 
 @app.post("/tools/{name}")
 def run_tool(name: str, payload: ToolPayload) -> dict:
-    if name == "end_conversation":
-        result = T.end_conversation(payload.conversation_id or "")
-    else:
-        fn = _TOOL_FNS.get(name)
-        if fn is None:
-            raise HTTPException(404, f"unknown tool: {name}")
-        try:
-            result = fn(payload.args)
-        except Exception as e:
-            log.exception(f"tool {name} failed")
-            result = {"ok": False, "error": str(e)}
+    fn = _TOOL_FNS.get(name)
+    if fn is None:
+        raise HTTPException(404, f"unknown tool: {name}")
+    try:
+        result = fn(payload.args, payload.conversation_id)
+    except Exception as e:
+        log.exception(f"tool {name} failed")
+        result = {"ok": False, "error": str(e)}
 
     if name == "identify_user" and result.get("ok") and payload.conversation_id:
         with get_session() as s:
