@@ -17,7 +17,7 @@ from typing import Any, Optional
 
 import google.generativeai as genai
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlmodel import select
@@ -74,24 +74,8 @@ def tavus_start() -> dict:
 
 
 @app.post("/tavus/event")
-async def tavus_event(req: Request) -> dict:
-    """Best-effort transcript capture from Tavus webhooks. Tool calls are
-    handled on the frontend (per Tavus's design); we just persist utterances."""
-    try:
-        body = await req.json()
-    except Exception:
-        return {"ok": True}
-
-    event_type = body.get("event_type") or body.get("message_type") or ""
-    conv_id = body.get("conversation_id")
-    props = body.get("properties") or {}
-
-    if event_type.endswith("utterance") and conv_id:
-        role = props.get("role") or props.get("speaker") or "user"
-        text = props.get("speech") or props.get("text") or ""
-        if text:
-            _record_turn(conv_id, "assistant" if role.startswith("repl") else "user", text)
-
+def tavus_event() -> dict:
+    """Webhook sink. The frontend owns the transcript and tool dispatch."""
     return {"ok": True}
 
 

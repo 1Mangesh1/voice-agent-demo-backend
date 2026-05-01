@@ -19,7 +19,7 @@ Function calling is dispatched on the **frontend** — Tavus broadcasts a
 | Method | Path | What it does |
 | --- | --- | --- |
 | POST | `/tavus/start` | Creates (or reuses) the Mira persona, opens a Tavus conversation, returns the Daily room URL. |
-| POST | `/tavus/event` | Webhook — captures utterances Tavus emits (best-effort; transcript is also posted by the frontend). |
+| POST | `/tavus/event` | Webhook sink — quiets Tavus's retry logic. The frontend owns the transcript. |
 | POST | `/tools/{name}` | Runs one of the 7 tools and returns its result. |
 | POST | `/transcript` | Frontend appends each utterance for the summary step. |
 | POST | `/summary` | Calls Gemini on the stored transcript, returns 4–6 bullet recap + extracted info. |
