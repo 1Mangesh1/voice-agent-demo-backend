@@ -164,6 +164,8 @@ class SummaryRequest(BaseModel):
 
 @app.post("/summary")
 def make_summary(req: SummaryRequest) -> dict:
+    tavus.end_conversation(req.room)
+
     with get_session() as s:
         sess = s.exec(select(CallSession).where(CallSession.room_name == req.room)).first()
         if sess is None:
