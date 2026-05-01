@@ -201,6 +201,7 @@ def make_summary(req: SummaryRequest) -> dict:
 
 
 TAVUS_RATE_USD_PER_MIN = float(os.getenv("TAVUS_RATE_USD_PER_MIN", "0.15"))
+USD_TO_INR = float(os.getenv("USD_TO_INR", "83"))
 
 
 def _build_summary_response(sess: CallSession, s) -> dict:
@@ -212,9 +213,11 @@ def _build_summary_response(sess: CallSession, s) -> dict:
 
     duration_s = None
     cost_usd = None
+    cost_inr = None
     if sess.started_at and sess.ended_at:
         duration_s = max(0, int((sess.ended_at - sess.started_at).total_seconds()))
         cost_usd = round((duration_s / 60.0) * TAVUS_RATE_USD_PER_MIN, 4)
+        cost_inr = round(cost_usd * USD_TO_INR, 2)
 
     return {
         "room": sess.room_name,
@@ -223,6 +226,7 @@ def _build_summary_response(sess: CallSession, s) -> dict:
         "ended_at": sess.ended_at.isoformat() if sess.ended_at else None,
         "duration_seconds": duration_s,
         "cost_usd": cost_usd,
+        "cost_inr": cost_inr,
         "user_phone": sess.user_phone,
         "appointments": [
             {"id": a.id, "slot": a.slot, "status": a.status} for a in appts
