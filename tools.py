@@ -1,8 +1,7 @@
-"""7 tools the voice agent calls. Pure functions over the DB.
+"""The 7 booking tools, as plain functions over the DB.
 
-Each tool returns a dict with `ok`, plus tool-specific fields.
-The agent layer (agent.py) wraps these for LiveKit function-calling and emits
-UI events on the data channel before/after each call.
+Every tool returns a dict shaped {"ok": bool, ...}. The HTTP layer in
+server.py wraps these; nothing in this module knows about Tavus or FastAPI.
 """
 from datetime import datetime, timedelta
 from typing import Optional
@@ -14,7 +13,6 @@ def _normalize_phone(phone: str) -> str:
     return "".join(c for c in phone if c.isdigit() or c == "+")
 
 
-# 1. identify_user ------------------------------------------------------------
 def identify_user(phone: str, name: Optional[str] = None) -> dict:
     phone = _normalize_phone(phone)
     if len(phone.lstrip("+")) < 7:
@@ -37,7 +35,6 @@ def identify_user(phone: str, name: Optional[str] = None) -> dict:
         return {"ok": True, "phone": user.phone, "name": user.name, "new_user": new}
 
 
-# 2. fetch_slots --------------------------------------------------------------
 def fetch_slots(date: Optional[str] = None) -> dict:
     """Return up to 6 hardcoded slots for the given date (YYYY-MM-DD)
     or for tomorrow if not given. Excludes already-booked slots."""
@@ -64,7 +61,6 @@ def fetch_slots(date: Optional[str] = None) -> dict:
     return {"ok": True, "date": base.strftime("%Y-%m-%d"), "slots": free}
 
 
-# 3. book_appointment ---------------------------------------------------------
 def book_appointment(phone: str, slot: str) -> dict:
     phone = _normalize_phone(phone)
     try:
@@ -90,7 +86,6 @@ def book_appointment(phone: str, slot: str) -> dict:
         return {"ok": True, "id": appt.id, "phone": phone, "slot": slot}
 
 
-# 4. retrieve_appointments ----------------------------------------------------
 def retrieve_appointments(phone: str) -> dict:
     phone = _normalize_phone(phone)
     with get_session() as s:
@@ -105,7 +100,6 @@ def retrieve_appointments(phone: str) -> dict:
         }
 
 
-# 5. cancel_appointment -------------------------------------------------------
 def cancel_appointment(appointment_id: int) -> dict:
     with get_session() as s:
         appt = s.get(Appointment, appointment_id)
@@ -119,7 +113,6 @@ def cancel_appointment(appointment_id: int) -> dict:
         return {"ok": True, "id": appointment_id}
 
 
-# 6. modify_appointment -------------------------------------------------------
 def modify_appointment(appointment_id: int, new_slot: str) -> dict:
     try:
         datetime.strptime(new_slot, "%Y-%m-%dT%H:%M")
@@ -146,7 +139,6 @@ def modify_appointment(appointment_id: int, new_slot: str) -> dict:
         return {"ok": True, "id": appointment_id, "slot": new_slot}
 
 
-# 7. end_conversation ---------------------------------------------------------
 def end_conversation(room_name: str) -> dict:
     """Marks call ended. Summary generated separately by /summary endpoint."""
     with get_session() as s:
