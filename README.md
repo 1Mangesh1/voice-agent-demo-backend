@@ -54,7 +54,7 @@ I started on that exact stack — the git history walks through it: a LiveKit Ag
 - Lip-sync is native (Phoenix-4 model). The earlier stack used a custom amplitude-driven SVG portrait — readable as "talking" but not the real thing.
 - All assignment must-haves are still met: voice in/out, 7 tools called by the LLM, double-book guards, DB persistence (Supabase Postgres), live tool indicators, post-call summary.
 
-**What I'd change for production at Mykare's scale:**
+**What I'd change for production:**
 
 - Tavus CVI is great for fast iteration but locks you into Tavus's STT/LLM/TTS choices. For finer voice control or cost-per-minute optimisation at volume, the multi-vendor pipeline is worth its complexity.
 - Real production would likely be: own the orchestration layer (LiveKit Agents pattern) so you can swap STT/TTS/LLM per call by language, latency, or cost. Tavus just for the avatar layer.
