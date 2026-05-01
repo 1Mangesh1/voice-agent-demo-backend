@@ -47,13 +47,9 @@ app.add_middleware(
 
 # ---- Tavus -----------------------------------------------------------------
 
-def _public_base() -> str:
-    return (os.getenv("PUBLIC_BASE_URL") or "").rstrip("/")
-
-
 @app.post("/tavus/start")
 def tavus_start() -> dict:
-    base = _public_base()
+    base = (os.getenv("PUBLIC_BASE_URL") or "").rstrip("/")
     callback = f"{base}/tavus/event" if base else None
     try:
         conv = tavus.create_conversation(callback_url=callback)
