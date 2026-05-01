@@ -1,35 +1,38 @@
-"""FastAPI server. Two endpoints:
-  POST /token       → mint LiveKit JWT for browser to join a room
-  POST /summary     → generate summary from CallSession.transcript via Gemini (<10s)
-  GET  /session/{room} → fetch session record + appointments
+"""FastAPI server.
 
-Run: `uvicorn server:app --port 8000 --reload`
+Endpoints:
+  POST /tavus/start           → create Tavus conversation; return Daily room URL
+  POST /tavus/event           → Tavus webhook for transcripts + lifecycle
+  POST /tools/{name}          → execute one of the 7 tools (called by frontend
+                                when Tavus emits a tool_call app-message)
+  POST /summary               → Gemini-generated post-call summary (<10s)
+  GET  /session/{room}        → fetch session record + appointments
+  GET  /health                → liveness
 """
 import json
+import logging
 import os
-import uuid
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime
+from typing import Any, Optional
 
 import google.generativeai as genai
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from livekit import api
 from pydantic import BaseModel
 from sqlmodel import select
 
+import tavus
+import tools as T
 from db import Appointment, CallSession, init_db, get_session
 
 load_dotenv()
+log = logging.getLogger("server")
 
-# Don't crash module import when the DB is unreachable — uvicorn must still
-# bind PORT so Render's healthcheck passes and the user can swap envs.
 try:
     init_db()
 except Exception as e:  # pragma: no cover
-    import logging
-    logging.getLogger("server").warning(f"init_db deferred: {e}")
+    log.warning(f"init_db deferred: {e}")
 
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY", ""))
 
@@ -42,29 +45,136 @@ app.add_middleware(
 )
 
 
-class TokenRequest(BaseModel):
-    identity: Optional[str] = None
-    room: Optional[str] = None
+# ---- Tavus -----------------------------------------------------------------
+
+def _public_base() -> str:
+    return (os.getenv("PUBLIC_BASE_URL") or "").rstrip("/")
 
 
-@app.post("/token")
-def mint_token(req: TokenRequest) -> dict:
-    identity = req.identity or f"user-{uuid.uuid4().hex[:8]}"
-    room = req.room or f"call-{uuid.uuid4().hex[:8]}"
-    key = os.getenv("LIVEKIT_API_KEY")
-    secret = os.getenv("LIVEKIT_API_SECRET")
-    if not key or not secret:
-        raise HTTPException(500, "livekit creds not configured")
-    token = (
-        api.AccessToken(key, secret)
-        .with_identity(identity)
-        .with_name(identity)
-        .with_grants(api.VideoGrants(room=room, room_join=True, can_publish=True, can_subscribe=True))
-        .with_ttl(timedelta(hours=1))
-        .to_jwt()
-    )
-    return {"token": token, "url": os.getenv("LIVEKIT_URL"), "room": room, "identity": identity}
+@app.post("/tavus/start")
+def tavus_start() -> dict:
+    base = _public_base()
+    callback = f"{base}/tavus/event" if base else None
+    try:
+        conv = tavus.create_conversation(callback_url=callback)
+    except Exception as e:
+        log.exception("tavus start failed")
+        raise HTTPException(502, f"tavus_start_failed: {e}")
 
+    room = conv["conversation_id"]
+    with get_session() as s:
+        if not s.exec(select(CallSession).where(CallSession.room_name == room)).first():
+            s.add(CallSession(room_name=room, transcript="[]"))
+            s.commit()
+    return {
+        "conversation_id": room,
+        "conversation_url": conv["conversation_url"],
+        "meeting_token": conv.get("meeting_token"),
+    }
+
+
+@app.post("/tavus/event")
+async def tavus_event(req: Request) -> dict:
+    """Best-effort transcript capture from Tavus webhooks. Tool calls are
+    handled on the frontend (per Tavus's design); we just persist utterances."""
+    try:
+        body = await req.json()
+    except Exception:
+        return {"ok": True}
+
+    event_type = body.get("event_type") or body.get("message_type") or ""
+    conv_id = body.get("conversation_id")
+    props = body.get("properties") or {}
+
+    if event_type.endswith("utterance") and conv_id:
+        role = props.get("role") or props.get("speaker") or "user"
+        text = props.get("speech") or props.get("text") or ""
+        if text:
+            _record_turn(conv_id, "assistant" if role.startswith("repl") else "user", text)
+
+    return {"ok": True}
+
+
+# ---- 7 tools (called by frontend on Tavus tool_call) -----------------------
+
+class ToolPayload(BaseModel):
+    args: dict[str, Any] = {}
+    conversation_id: Optional[str] = None
+
+
+_TOOL_FNS = {
+    "identify_user": lambda a: T.identify_user(a.get("phone", ""), a.get("name")),
+    "fetch_slots": lambda a: T.fetch_slots(a.get("date")),
+    "book_appointment": lambda a: T.book_appointment(a.get("phone", ""), a.get("slot", "")),
+    "retrieve_appointments": lambda a: T.retrieve_appointments(a.get("phone", "")),
+    "cancel_appointment": lambda a: T.cancel_appointment(int(a.get("appointment_id", 0))),
+    "modify_appointment": lambda a: T.modify_appointment(
+        int(a.get("appointment_id", 0)), a.get("new_slot", "")
+    ),
+}
+
+
+@app.post("/tools/{name}")
+def run_tool(name: str, payload: ToolPayload) -> dict:
+    if name == "end_conversation":
+        result = T.end_conversation(payload.conversation_id or "")
+    else:
+        fn = _TOOL_FNS.get(name)
+        if fn is None:
+            raise HTTPException(404, f"unknown tool: {name}")
+        try:
+            result = fn(payload.args)
+        except Exception as e:
+            log.exception(f"tool {name} failed")
+            result = {"ok": False, "error": str(e)}
+
+    if name == "identify_user" and result.get("ok") and payload.conversation_id:
+        with get_session() as s:
+            sess = s.exec(
+                select(CallSession).where(CallSession.room_name == payload.conversation_id)
+            ).first()
+            if sess and not sess.user_phone:
+                sess.user_phone = result.get("phone")
+                s.add(sess)
+                s.commit()
+
+    return {"name": name, "result": result}
+
+
+# ---- Transcript ingestion (frontend posts every utterance) -----------------
+
+class TranscriptAppend(BaseModel):
+    conversation_id: str
+    role: str
+    text: str
+
+
+@app.post("/transcript")
+def append_transcript(t: TranscriptAppend) -> dict:
+    if t.text.strip():
+        _record_turn(t.conversation_id, t.role, t.text)
+    return {"ok": True}
+
+
+def _record_turn(room: str, role: str, text: str) -> None:
+    with get_session() as s:
+        sess = s.exec(select(CallSession).where(CallSession.room_name == room)).first()
+        if sess is None:
+            sess = CallSession(room_name=room, transcript="[]")
+            s.add(sess)
+            s.commit()
+            s.refresh(sess)
+        try:
+            arr = json.loads(sess.transcript or "[]")
+        except json.JSONDecodeError:
+            arr = []
+        arr.append({"role": role, "text": text, "ts": datetime.utcnow().isoformat()})
+        sess.transcript = json.dumps(arr)
+        s.add(sess)
+        s.commit()
+
+
+# ---- Summary ---------------------------------------------------------------
 
 class SummaryRequest(BaseModel):
     room: str
