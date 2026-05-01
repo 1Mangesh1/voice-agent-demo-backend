@@ -11,6 +11,35 @@ Browser does the call. Tavus runs voice + face. This service:
 
 Tool execution lives on the **frontend** — Tavus broadcasts `conversation.tool_call` Daily app-messages, frontend POSTs them here, replies via `conversation.respond`.
 
+## Live
+
+- Frontend: https://voice-agent-demo-frontend.vercel.app
+- Backend health: https://voice-agent-demo-api.onrender.com/health
+- Frontend repo: https://github.com/1Mangesh1/voice-agent-demo-frontend
+- Demo recording: _(coming Fri)_
+
+## Flow
+
+```
+ browser ─mic→ Daily room (managed by Tavus)
+                   │
+                   ▼
+            Tavus replica  ──voice + face──→ browser ─speaker
+                   │
+            LLM emits tool_call as Daily app-message
+                   │
+                   ▼
+          frontend dispatches → POST /tools/{name}
+                                       │
+                                       ▼
+                               this service ←→ Supabase
+                                       │
+              JSON result → frontend → conversation.respond
+                                                  │
+                                                  ▼
+                                       Tavus LLM continues
+```
+
 ## Stack decision: Tavus CVI vs the suggested stack
 
 The assignment **suggested** a multi-vendor pipeline:
@@ -102,4 +131,25 @@ Supabase on Render free tier → use the **Session pooler** URL (port 5432, `aws
 
 - Tavus does not run tools server-side. Frontend dispatches.
 - Personas reused by name (`mira-clinic`). Restart re-resolves via API. No duplicates.
-- Render free dyno sleeps after 15 min idle. Frontend pings `/health` on landing to warm it.
+- Render free dyno sleeps after 15 min idle. Frontend pings `/health` on landing to warm it. UptimeRobot every 5 min would be the prod fix.
+
+## Reviewing this
+
+Try without setup:
+1. Open the live frontend URL.
+2. Click **Start call**, grant mic.
+3. Speak: "Hi, my number is nine eight seven six five four three two one zero, I'd like to book an appointment for tomorrow."
+4. Mira identifies you (reads phone back digit-by-digit), reads slot options, books, confirms.
+5. End the call → summary appears in <10s with bullet recap, on-file appointments, duration, cost (USD + INR).
+
+Verify the tool layer in isolation:
+```bash
+pytest   # 10 cases, no Tavus / no HTTP, runs on SQLite in-memory
+```
+
+## Not implemented (and why)
+
+- **Server-side tool execution.** Tavus's recommended pattern is frontend dispatch via Daily app-messages. Trade-off: simpler latency story, slightly worse observability. Production would move dispatch server-side and use Tavus only for STT/LLM/TTS/face.
+- **HMAC on the Tavus webhook.** `/tavus/event` is a no-op sink right now (frontend owns the transcript). Production would HMAC verify per Tavus docs.
+- **Connection pooling beyond Supabase defaults.** Single-tenant demo doesn't need it. Production would tune the SQLAlchemy pool per-replica.
+- **Phone correction loop beyond confirm-once.** Mira reads the phone back and waits for "yes". Production would also accept "no, it's actually …" mid-flow more gracefully.
