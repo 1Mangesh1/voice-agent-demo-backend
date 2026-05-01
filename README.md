@@ -18,6 +18,12 @@ Tool execution lives on the **frontend** — Tavus broadcasts `conversation.tool
 - Frontend repo: https://github.com/1Mangesh1/voice-agent-demo-frontend
 - Demo recording: _(coming Fri)_
 
+## On the live demo
+
+Tavus's free tier caps at 25 conversation-minutes/month. The demo recording walks through the full happy path — identify, fetch slots, book, retrieve, modify, cancel, summary. The live URL is functional but rate-limited; if a fresh session doesn't connect, the recording shows the same flow against the same backend.
+
+In production this isn't a constraint — it's a free-tier artifact of the submission environment.
+
 ## Flow
 
 ```
