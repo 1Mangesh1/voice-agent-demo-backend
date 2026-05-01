@@ -107,16 +107,20 @@ def run_tool(name: str, payload: ToolPayload) -> dict:
         result = {"ok": False, "error": str(e)}
 
     if name == "identify_user" and result.get("ok") and payload.conversation_id:
-        with get_session() as s:
-            sess = s.exec(
-                select(CallSession).where(CallSession.room_name == payload.conversation_id)
-            ).first()
-            if sess and not sess.user_phone:
-                sess.user_phone = result.get("phone")
-                s.add(sess)
-                s.commit()
+        _link_caller_to_session(payload.conversation_id, result.get("phone"))
 
     return {"name": name, "result": result}
+
+
+def _link_caller_to_session(room: str, phone: Optional[str]) -> None:
+    if not phone:
+        return
+    with get_session() as s:
+        sess = s.exec(select(CallSession).where(CallSession.room_name == room)).first()
+        if sess and not sess.user_phone:
+            sess.user_phone = phone
+            s.add(sess)
+            s.commit()
 
 
 # ---- Transcript ingestion (frontend posts every utterance) -----------------
