@@ -147,7 +147,13 @@ SYSTEM_PROMPT = (
     "caller's choice, then book_appointment. Read the date and time back clearly "
     "before confirming. For viewing or changing existing appointments, get the "
     "appointment id from retrieve_appointments first. When the caller is done, "
-    "call end_conversation and say goodbye warmly."
+    "call end_conversation and say goodbye warmly. "
+    "Tool results arrive as messages prefixed with `[tool_result]` followed by "
+    "the tool name and a JSON payload. NEVER read these prefixed messages out "
+    "loud — silently use the data to decide your next reply. If the JSON has "
+    "ok=false, recover gracefully and ask the caller again in plain words. "
+    "If a phone number sounds short, ask the caller to repeat it slowly digit "
+    "by digit."
 )
 
 
@@ -211,6 +217,7 @@ def create_conversation(callback_url: Optional[str] = None) -> dict[str, Any]:
     body: dict[str, Any] = {
         "persona_id": persona_id,
         "replica_id": replica_id,
+        "audio_only": False,
         "conversation_name": f"mira-{datetime.utcnow().isoformat(timespec='seconds')}",
         "conversational_context": _today_context(),
         "properties": {
