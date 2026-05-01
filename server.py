@@ -255,6 +255,6 @@ def get_session_info(room: str) -> dict:
         }
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health() -> dict:
     return {"ok": True}
