@@ -16,10 +16,12 @@ from datetime import datetime
 from typing import Any, Optional
 
 import google.generativeai as genai
+import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from sqlalchemy import text
 from sqlmodel import select
 
 import tavus
@@ -53,6 +55,12 @@ def tavus_start() -> dict:
     callback = f"{base}/tavus/event" if base else None
     try:
         conv = tavus.create_conversation(callback_url=callback)
+    except httpx.HTTPStatusError as e:
+        log.exception("tavus start failed")
+        upstream = e.response.status_code
+        if upstream == 402:
+            raise HTTPException(402, "tavus_out_of_credits")
+        raise HTTPException(502, f"tavus_start_failed: upstream {upstream}")
     except Exception as e:
         log.exception("tavus start failed")
         raise HTTPException(502, f"tavus_start_failed: {e}")
@@ -257,4 +265,11 @@ def get_session_info(room: str) -> dict:
 
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health() -> dict:
-    return {"ok": True}
+    db_ok = False
+    try:
+        with get_session() as session:
+            session.exec(text("SELECT 1")).first()
+        db_ok = True
+    except Exception as exc:
+        log.warning("health db ping failed: %s", exc)
+    return {"ok": True, "db": db_ok}

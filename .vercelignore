@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.env
+.env.*
+app.db
+*.sqlite
+tests/
+Dockerfile
+.dockerignore
+render.yaml
+start.sh
+README.md
